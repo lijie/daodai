@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>倒带刺客</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#06122a;color:#d8e8ff;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;touch-action:none;user-select:none;-webkit-user-select:none}
+canvas{display:block;position:fixed;left:0;top:0}
+#btns{position:fixed;right:10px;top:10px;display:flex;gap:6px;z-index:5}
+#btns button,.mbtn{width:38px;height:38px;border-radius:8px;border:1px solid #6fa8ff;background:rgba(10,35,80,.85);color:#cfe3ff;font-size:16px;cursor:pointer}
+#smokeBtn{position:fixed;z-index:5;display:none;width:auto;padding:0 12px;font-size:14px}
+.ov{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:10;background:rgba(4,12,30,.78)}
+.ov.show{display:flex}
+.card{width:min(560px,92vw);max-height:92vh;overflow:auto;background:#0c2350;border:1px solid #6fa8ff;border-radius:12px;padding:20px 22px;box-shadow:0 0 40px rgba(80,160,255,.25)}
+.card h1{font-size:28px;color:#7ff3ff;letter-spacing:4px;margin-bottom:4px}
+.card h2{font-size:20px;color:#7ff3ff;margin-bottom:8px}
+.card .sub{color:#8fb2e8;font-size:13px;margin-bottom:12px}
+.card ul{padding-left:18px;font-size:14px;line-height:1.65}
+.card li{margin-bottom:3px}
+.card b{color:#ffb3b3}.card em{color:#7ff3ff;font-style:normal}
+.card p{font-size:14px;line-height:1.6;margin:6px 0}
+.row{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+.big{flex:1;min-width:120px;height:44px;border-radius:8px;border:1px solid #7ff3ff;background:#11408a;color:#fff;font-size:16px;cursor:pointer}
+.big.alt{background:transparent;border-color:#6fa8ff;color:#cfe3ff}
+#clearPanel{position:fixed;left:50%;transform:translateX(-50%);bottom:12px;z-index:9;display:none;width:min(520px,94vw);background:rgba(12,35,80,.92);border:1px solid #6fa8ff;border-radius:12px;padding:12px 16px}
+#clearPanel h2{font-size:18px;color:#7ff3ff}#clearPanel p{font-size:13px;color:#b9cff2;margin-top:4px;line-height:1.5}
+</style></head><body>
+<canvas id="cv"></canvas>
+<div id="btns"><button id="bPause" title="暂停">⏸</button><button id="bRestart" title="重开本轮">↻</button><button id="bMute" title="静音">🔊</button></div>
+<button id="smokeBtn" class="mbtn">烟雾弹</button>
+<div id="ovRules" class="ov show"><div class="card">
+<h1>倒带刺客</h1><div class="sub">刺杀只有 10 秒。之后时间倒带，过去的你会回来——这次你得拦住他。</div>
+<ul>
+<li><em>第 1 轮</em>：你是刺客，10 秒内干掉<span style="color:#ffd76a">金色目标</span>。</li>
+<li><em>之后每一轮</em>：时间倒带，你从守卫点出发。之前每一轮的你都变成<b>红色残影</b>，从各自的起点把当时的每一步、每一枪原样重放。你要守住目标 12 秒（或干掉所有残影）。<em>倒带后你比残影早醒 1.5 秒</em>，它们前 1.5 秒原地不动。</li>
+<li><b>残影的子弹</b>会打死目标、警卫和你，但穿过其他残影。所以你上一轮开过的每一枪，这一轮都会再飞一次。</li>
+<li><em>你的子弹</em>能打死残影、警卫，也会误伤目标。被你打死的残影只在<em>本轮</em>消失；下一轮它照旧从头重放（过去是固定的，你每轮都要重新拦一次）。</li>
+<li>目标死了 / 你中弹 / 第 1 轮超时 → 本轮失败，只重来<em>当前这一轮</em>，之前的残影不变。</li>
+<li>淡红虚线是残影上一次走过的路线，用来提前布局。</li>
+</ul>
+<p>电脑：WASD 移动，鼠标瞄准，左键射击，E 或右键扔烟雾弹，P 暂停，R 重开本轮。<br>手机：左摇杆移动，右摇杆瞄准，推到底开火。</p>
+<div class="row"><button class="big" id="bStart">开始</button></div></div></div>
+<div id="ovLevel" class="ov"><div class="card"><h2 id="lvTitle"></h2><div class="sub" id="lvElem"></div><p id="lvDesc"></p><div class="row"><button class="big" id="bGo">进入第 1 轮</button></div></div></div>
+<div id="ovPause" class="ov"><div class="card"><h2>暂停</h2><div class="row"><button class="big" id="bResume">继续</button><button class="big alt" id="bRestartLv">重开本关</button><button class="big alt" id="bRulesAgain">规则</button></div></div></div>
+<div id="ovFinal" class="ov"><div class="card"><h1>历史改写完成</h1><div class="sub">五座宅子，每一个过去的你都被拦住了。</div><p id="finalStats"></p><div class="row"><button class="big" id="bAgain">从头再来</button></div></div></div>
+<div id="clearPanel"><h2 id="cpTitle"></h2><p id="cpText"></p><div class="row"><button class="big" id="bNext">下一关</button></div></div>
+<script>
+(()=>{
+const W=960,H=600,TS=40,DT=1/60,RT=720,RT1=600,GD=90,SPD=125,BSPD=450,R=11,BR=3;
+const LEVELS=[
+{name:'第一关 · 后院小宅',elem:'新元素：门和钥匙',rounds:3,
+ desc:'目标房间的门锁着，钥匙在北边的小屋里。拿着钥匙碰门就能打开。<br>守卫轮里你被关在目标房间里——想想过去的你会从哪里进来。也可以试试：钥匙只有一把。',
+ map:["########################","#.......#.........#....#","#.......#....K....#....#","#.......#.........#.T..#","#.......#.........#....#","#.......####.######....#","#.................#....#","#.P...............#....#","#.................#..S.#","#.................D....#","#.................#....#","#.................#....#","#.................#....#","#.................#....#","########################"],guards:[]},
+{name:'第二关 · 巡夜的庭院',elem:'新元素：巡逻警卫',rounds:3,
+ desc:'白色警卫来回巡逻，扇形是视野。被看见约半秒后他会开枪——打你，也打残影。警卫中一枪就倒。<br>过去的你打倒过的警卫，这一轮可能还是会被他再打倒一次。',
+ map:["########################","#..........#...........#","#..........#........S..#","#..........#...........#","#..........#...........#","#....##....#....##.....#","#..........#...........#","#.P....................#","#..........#........T..#","#....##....#....##.....#","#..........#...........#","#..........#...........#","#......................#","#..........#...........#","########################"],
+ guards:[[[14,2],[14,12]],[[13,12],[21,12]]]},
+{name:'第三关 · 玻璃花房',elem:'新元素：防弹玻璃',rounds:4,
+ desc:'淡蓝色的玻璃挡子弹、挡人，但挡不住视线。目标在玻璃花房里，只有南面一个缺口。<br>想清楚哪些角度的子弹会飞进缺口。',
+ map:["########################","#......................#","#..P.............GGGGG.#","#................G...G.#","#................G.T.G.#","#................G...G.#","#######..#####...GG.GG.#","#......................#","#......................#","#..........GGGG........#","#......................#","#..............S.......#","#......................#","#......................#","########################"],guards:[[[3,9],[9,9]]]},
+{name:'第四关 · 长廊',elem:'新元素：一次性烟雾弹',rounds:4,
+ desc:'每轮一颗烟雾弹（E 键 / 右键 / 手机按钮），扔到准星方向，持续 4 秒。烟雾挡住子弹，也挡住警卫的视线。<br>注意：过去的你扔过的烟，这一轮也会再扔一次。',
+ map:["########################","#......................#","#.P..........#.........#","#............#.........#","#....###.....#....T....#","#............#.........#","#............#.........#","#......................#","#............#.........#","#....###.....#.........#","#............#.........#","#............#.....S...#","#......................#","#............#.........#","########################"],
+ guards:[[[15,6],[21,6]],[[21,9],[15,9]]]},
+{name:'第五关 · 回声大厅',elem:'新元素：同步开火',rounds:3,
+ desc:'这座大厅里，<b>你开枪的那一刻，所有活着的残影也会朝它们当时面对的方向开一枪</b>。<br>先看清每个残影朝哪儿，再扣扳机。大厅只有南北两个入口，警卫在里面绕圈。',
+ map:["########################","#......................#","#.P....................#","#....######..######....#","#....#............#....#","#....#............#....#","#....#............#....#","#....#.....T......#....#","#....#............#....#","#....#............#....#","#....#............#....#","#....######..######....#","#...................S..#","#......................#","########################"],guards:[[[7,5],[16,5],[16,9],[7,9]]],sync:true}
+];
+const cv=document.getElementById('cv'),cx=cv.getContext('2d');
+let VW=0,VH=0,DPR=1,view={s:1,ox:0,oy:0,portrait:false,stickY:0};
+function resize(){DPR=Math.min(2,window.devicePixelRatio||1);VW=innerWidth;VH=innerHeight;cv.width=VW*DPR;cv.height=VH*DPR;cv.style.width=VW+'px';cv.style.height=VH+'px';
+ const top=60,portrait=VH>VW*1.15;let availH=portrait?VH*0.5:VH-top-10;let s=Math.min((VW-12)/W,availH/H);
+ view={s,ox:(VW-W*s)/2,oy:top,portrait,stickY:portrait?top+H*s+(VH-top-H*s)/2:VH-90};
+ const sb=document.getElementById('smokeBtn');if(portrait){sb.style.left='50%';sb.style.transform='translateX(-50%)';sb.style.top=(top+H*s+14)+'px'}else{sb.style.left='50%';sb.style.transform='translateX(-50%)';sb.style.top='';sb.style.bottom='14px'}}
+addEventListener('resize',resize);resize();
+// ---------- audio ----------
+let AC=null,muted=false;
+function snd(f,d,type,v,slide){if(muted)return;try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();const o=AC.createOscillator(),g=AC.createGain();o.type=type||'square';o.frequency.value=f;if(slide)o.frequency.exponentialRampToValueAtTime(slide,AC.currentTime+d);g.gain.value=(v||.03);g.gain.exponentialRampToValueAtTime(.0001,AC.currentTime+d);o.connect(g);g.connect(AC.destination);o.start();o.stop(AC.currentTime+d)}catch(e){}}
+// ---------- game state ----------
+const G={state:'rules',level:0,round:1,hist:[],world:null,paused:false,retries:0,totalRetries:0,levelStart:0,anim:0,msg:'',stats:[],readyT:0};
+let rnd=1;function vrand(){rnd=(rnd*16807)%2147483647;return rnd/2147483647}// visual only
+function tc(t){return (t+.5)*TS}
+function parse(lv){const L=LEVELS[lv];const m=L.map.map(r=>r.split(''));let P,S,T,K=null;const doors=[];
+ for(let y=0;y<15;y++)for(let x=0;x<24;x++){const c=m[y][x];if(c==='P'){P=[tc(x),tc(y)];m[y][x]='.'}if(c==='S'){S=[tc(x),tc(y)];m[y][x]='.'}if(c==='T'){T=[tc(x),tc(y)];m[y][x]='.'}if(c==='K'){K={x:tc(x),y:tc(y),taken:false};m[y][x]='.'}if(c==='D')doors.push({tx:x,ty:y,open:false})}
+ return {m,P,S,T,K,doors}}
+function mkActor(kind,idx,sp,rec,trace){return {kind,idx,x:sp[0],y:sp[1],px:sp[0],py:sp[1],ang:0,alive:true,hasKey:false,smoke:1,cd:0,rec,trace0:trace,trace:[],killedAt:-1}}
+function resetRound(){const lv=LEVELS[G.level],p=parse(G.level);
+ const w={tick:0,m:p.m,doors:p.doors,key:p.K,bullets:[],smokes:[],fx:[],target:{x:p.T[0],y:p.T[1],alive:true},P:p.P,S:p.S,sync:!!lv.sync,
+  guards:lv.guards.map(path=>({path:path.map(q=>[tc(q[0]),tc(q[1])]),x:tc(path[0][0]),y:tc(path[0][1]),pi:1,ang:0,seeT:0,cd:0,alive:true,trace:[]})),
+  ghosts:G.hist.map((h,i)=>mkActor('ghost',i,i===0?p.P:p.S,h.rec,h.trace)),rec:[],done:null};
+ w.player=mkActor('player',G.hist.length,G.round===1?p.P:p.S,null,null);w.actors=[...w.ghosts,w.player];G.world=w}
+function solidAt(w,tx,ty,forBullet){if(tx<0||ty<0||tx>=24||ty>=15)return true;const c=w.m[ty][tx];if(c==='#'||c==='G')return true;if(c==='D'){const d=w.doors.find(d=>d.tx===tx&&d.ty===ty);return !d.open}return false}
+function circleSolid(w,x,y,r){const x0=Math.floor((x-r)/TS),x1=Math.floor((x+r)/TS),y0=Math.floor((y-r)/TS),y1=Math.floor((y+r)/TS);
+ for(let ty=y0;ty<=y1;ty++)for(let tx=x0;tx<=x1;tx++){if(!solidAt(w,tx,ty))continue;const cx_=Math.max(tx*TS,Math.min(x,tx*TS+TS)),cy_=Math.max(ty*TS,Math.min(y,ty*TS+TS));if((cx_-x)**2+(cy_-y)**2<r*r)return true}return false}
+function inSmoke(w,x,y){for(const s of w.smokes)if((s.x-x)**2+(s.y-y)**2<s.r*s.r)return true;return false}
+function blocked(w,x1,y1,x2,y2,mode){const d=Math.hypot(x2-x1,y2-y1),n=Math.ceil(d/2);for(let i=1;i<n;i++){const x=x1+(x2-x1)*i/n,y=y1+(y2-y1)*i/n,tx=Math.floor(x/TS),ty=Math.floor(y/TS);
+ if(tx<0||ty<0||tx>=24||ty>=15)return true;const c=w.m[ty][tx];if(c==='#')return true;if(c==='G'&&mode==='bullet')return true;if(c==='D'&&solidAt(w,tx,ty))return true;if(inSmoke(w,x,y))return true}return false}
+function fire(w,a,ang,owner){w.bullets.push({x:a.x+Math.cos(ang)*16,y:a.y+Math.sin(ang)*16,vx:Math.cos(ang)*BSPD,vy:Math.sin(ang)*BSPD,owner,src:a,life:3})}
+function kill(w,e,how){e.alive=false;e.killedAt=w.tick;for(let i=0;i<14;i++){const a=vrand()*6.28,s=40+vrand()*120;w.fx.push({x:e.x,y:e.y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,t:.5,c:how})}}
+let liveInput={mx:0,my:0,a:0,f:0,s:0,sx:0,sy:0};G.botFn=null;
+function step(){const w=G.world;if(!w||w.done)return;const t=w.tick;
+ const pin=G.botFn?G.botFn(api):Object.assign({},liveInput);pin.a=+pin.a||0;w.rec.push([+(pin.mx||0),+(pin.my||0),pin.a,pin.f?1:0,pin.s?1:0,pin.sx||0,pin.sy||0]);
+ for(const a of w.actors){a.px=a.x;a.py=a.y;if(!a.alive)continue;let inp;
+  if(a.kind==='player')inp=w.rec[t];else inp=(t>=GD?a.rec[t-GD]:null)||[0,0,a.ang,0,0,0,0];
+  let mx=inp[0],my=inp[1];const ml=Math.hypot(mx,my);if(ml>1){mx/=ml;my/=ml}
+  a.ang=inp[2];const nx=a.x+mx*SPD*DT;if(!circleSolid(w,nx,a.y,R))a.x=nx;const ny=a.y+my*SPD*DT;if(!circleSolid(w,a.x,ny,R))a.y=ny;
+  if(w.key&&!w.key.taken&&Math.hypot(w.key.x-a.x,w.key.y-a.y)<24){w.key.taken=true;a.hasKey=true;snd(880,.12,'triangle',.04)}
+  if(a.hasKey)for(const d of w.doors)if(!d.open&&Math.hypot(tc(d.tx)-a.x,tc(d.ty)-a.y)<42){d.open=true;snd(300,.2,'sawtooth',.03,600)}
+  a.cd-=DT;if(inp[3]&&a.cd<=0){a.cd=.35;fire(w,a,a.ang,a.kind==='player'?'p':'g');snd(a.kind==='player'?620:420,.06,'square',a.kind==='player'?.025:.012,200);
+   if(a.kind==='player'&&w.sync)for(const g of w.ghosts)if(g.alive){fire(w,g,g.ang,'g');w.fx.push({x:g.x,y:g.y,vx:0,vy:0,t:.3,c:'ring'})}}
+  if(inp[4]&&a.smoke>0){a.smoke--;let dx=inp[5]-a.x,dy=inp[6]-a.y,dl=Math.hypot(dx,dy);if(dl>220){dx*=220/dl;dy*=220/dl}w.smokes.push({x:a.x+dx,y:a.y+dy,r:10,t:4});snd(160,.3,'sawtooth',.02,60)}}
+ // guards
+ for(const g of w.guards){if(!g.alive)continue;g.cd-=DT;let best=null,bd=1e9;
+  for(const a of w.actors){if(!a.alive)continue;const dx=a.x-g.x,dy=a.y-g.y,d=Math.hypot(dx,dy);if(d>200)continue;let da=Math.atan2(dy,dx)-g.ang;da=Math.atan2(Math.sin(da),Math.cos(da));
+   if((Math.abs(da)<.6||(g.seeT>0&&d<200))&&!blocked(w,g.x,g.y,a.x,a.y,'sight')&&d<bd){bd=d;best=a}}
+  if(best){g.ang=Math.atan2(best.y-g.y,best.x-g.x);g.seeT+=DT;if(g.seeT>.45&&g.cd<=0){g.cd=.8;fire(w,g,g.ang,'guard');snd(240,.08,'square',.02,120)}}
+  else{g.seeT=0;const tg=g.path[g.pi],dx=tg[0]-g.x,dy=tg[1]-g.y,d=Math.hypot(dx,dy);if(d<2){g.pi=(g.pi+1)%g.path.length}else{g.ang=Math.atan2(dy,dx);g.x+=dx/d*Math.min(d,55*DT);g.y+=dy/d*Math.min(d,55*DT)}}}
+ // bullets
+ for(const b of w.bullets){if(b.dead)continue;for(let k=0;k<4&&!b.dead;k++){b.x+=b.vx*DT/4;b.y+=b.vy*DT/4;
+  if(circleSolid(w,b.x,b.y,1)||inSmoke(w,b.x,b.y)){b.dead=true;w.fx.push({x:b.x,y:b.y,vx:0,vy:0,t:.15,c:'spark'});break}
+  const hit=e=>e.alive&&e!==b.src&&(e.x-b.x)**2+(e.y-b.y)**2<(R+BR)**2;
+  if(b.owner!=='guard'){for(const g of w.guards)if(hit(g)){kill(w,g,'w');b.dead=true;snd(180,.15,'sawtooth',.03,80);break}}
+  if(b.dead)break;
+  if(b.owner!=='guard'&&hit(w.target)){kill(w,w.target,'gold');b.dead=true;w.targetKiller=b.owner;snd(120,.4,'sawtooth',.05,50);break}
+  if(b.owner!=='g'&&b.owner!=='p'||b.owner==='guard'||b.owner==='p'){for(const g of w.ghosts)if(b.owner!=='g'&&hit(g)){kill(w,g,'r');b.dead=true;snd(300,.15,'triangle',.04,90);break}}
+  if(b.dead)break;
+  if(b.owner!=='p'&&hit(w.player)){kill(w,w.player,'c');b.dead=true;snd(90,.5,'sawtooth',.05,40);break}}
+  b.life-=DT;if(b.life<=0)b.dead=true}
+ w.bullets=w.bullets.filter(b=>!b.dead);
+ for(const s of w.smokes){s.t-=DT;s.r=Math.min(58,s.r+120*DT);if(s.t<.5)s.r*=0.97}w.smokes=w.smokes.filter(s=>s.t>0);
+ for(const a of w.actors)a.trace.push([a.x,a.y,a.alive?1:0,a.ang]);for(const g of w.guards)g.trace.push([g.x,g.y,g.alive?1:0]);
+ w.tick++;
+ // end checks
+ if(!w.player.alive)return end(false,'你被击中了');
+ if(G.round===1){if(!w.target.alive)return end(true);if(w.tick>=RT1)return end(false,'时间到，目标还活着')}
+ else{if(!w.target.alive)return end(false,w.targetKiller==='p'?'你误伤了目标':'过去的你得手了，目标死了');
+  if(w.tick>=RT)return end(true);if(w.ghosts.every(g=>!g.alive)&&!w.bullets.some(b=>b.owner==='g'))return end(true)}}
+function hash(){const w=G.world;let s=w.tick+'|';for(const a of w.actors)s+=a.x.toFixed(3)+','+a.y.toFixed(3)+','+(a.alive?1:0)+';';for(const g of w.guards)s+=g.x.toFixed(3)+','+g.y.toFixed(3)+(g.alive?1:0)+';';s+=w.target.alive+'|'+w.bullets.length;return s}
+function end(win,why){const w=G.world;w.done={win,why};G.msg=why||'';
+ if(!win){G.state='fail';G.msg=why;G.retries++;G.totalRetries++;snd(110,.4,'triangle',.04,70);return}
+ G.hist.push({rec:w.rec,trace:w.player.trace});
+ const lv=LEVELS[G.level];
+ if(G.round>=lv.rounds){G.state='clear';G.anim=0;G.stats[G.level]={retries:G.retries,time:(performance.now()-G.levelStart)/1000};showClear();snd(523,.15,'triangle',.04);setTimeout(()=>snd(784,.25,'triangle',.04),150)}
+ else{G.state='rewind';G.anim=0;snd(900,1.2,'sawtooth',.015,90)}}
+function nextRound(){G.round++;resetRound();G.state='ready';G.readyT=0}
+function startLevel(i){G.level=i;G.round=1;G.hist=[];G.retries=0;G.levelStart=performance.now();resetRound();G.state='level';hideAll();
+ const L=LEVELS[i];document.getElementById('lvTitle').textContent=L.name;document.getElementById('lvElem').textContent=L.elem+' · 共 '+L.rounds+' 轮';document.getElementById('lvDesc').innerHTML=L.desc;show('ovLevel')}
+function retryRound(){resetRound();G.state='ready';G.readyT=0}
+function show(id){document.getElementById(id).classList.add('show')}function hide(id){document.getElementById(id).classList.remove('show')}
+function hideAll(){['ovRules','ovLevel','ovPause','ovFinal'].forEach(hide);document.getElementById('clearPanel').style.display='none'}
+function showClear(){const L=LEVELS[G.level],st=G.stats[G.level];document.getElementById('cpTitle').textContent=L.name+' · 通关';
+ document.getElementById('cpText').innerHTML='时间线乱麻：'+(G.hist.length)+' 条你，叠在同一张图上。<br>用时 '+st.time.toFixed(0)+' 秒，重试 '+st.retries+' 次。';
+ document.getElementById('bNext').textContent=G.level<4?'下一关':'查看总结';document.getElementById('clearPanel').style.display='block'}
+// ---------- input ----------
+const keys={};let mouse={x:0,y:0,down:false},touchMode=false;
+function toWorld(x,y){return [(x-view.ox)/view.s,(y-view.oy)/view.s]}
+addEventListener('keydown',e=>{keys[e.code]=true;if(e.code==='KeyP'||e.code==='Escape')togglePause();if(e.code==='KeyR'&&(G.state==='play'||G.state==='fail'||G.state==='ready'))retryRound();if(e.code==='KeyE')smokeReq=true;
+ if(G.state==='fail'&&(e.code==='Space'||e.code==='Enter'))retryRound()});
+addEventListener('keyup',e=>{keys[e.code]=false});
+cv.addEventListener('mousemove',e=>{mouse.x=e.clientX;mouse.y=e.clientY});
+cv.addEventListener('mousedown',e=>{mouse.x=e.clientX;mouse.y=e.clientY;if(e.button===2){smokeReq=true;return}mouse.down=true;if(G.state==='fail')retryRound()});
+addEventListener('mouseup',e=>{if(e.button===0)mouse.down=false});cv.addEventListener('contextmenu',e=>e.preventDefault());
+let smokeReq=false;const sticks={L:null,R:null};
+function stickCenters(){const y=view.stickY,r=view.portrait?Math.min(70,VW*.17):60;return {L:[r+28,y],R:[VW-r-28,y],r}}
+cv.addEventListener('touchstart',e=>{touchMode=true;e.preventDefault();if(G.state==='fail'){retryRound();return}
+ for(const t of e.changedTouches){const sc=stickCenters();const side=t.clientX<VW/2?'L':'R';if(!sticks[side])sticks[side]={id:t.identifier,cx:sc[side][0],cy:sc[side][1],x:t.clientX,y:t.clientY}}},{passive:false});
+cv.addEventListener('touchmove',e=>{e.preventDefault();for(const t of e.changedTouches)for(const k of['L','R'])if(sticks[k]&&sticks[k].id===t.identifier){sticks[k].x=t.clientX;sticks[k].y=t.clientY}},{passive:false});
+const tend=e=>{for(const t of e.changedTouches)for(const k of['L','R'])if(sticks[k]&&sticks[k].id===t.identifier)sticks[k]=null};cv.addEventListener('touchend',tend);cv.addEventListener('touchcancel',tend);
+document.getElementById('smokeBtn').addEventListener('touchstart',e=>{e.preventDefault();smokeReq=true});document.getElementById('smokeBtn').addEventListener('click',()=>smokeReq=true);
+let lastTouchAng=0;
+function readInput(){const w=G.world,p=w.player;let mx=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0),my=(keys.KeyS||keys.ArrowDown?1:0)-(keys.KeyW||keys.ArrowUp?1:0);
+ let a,f=mouse.down,sx,sy;const [wx,wy]=toWorld(mouse.x,mouse.y);a=Math.atan2(wy-p.y,wx-p.x);sx=wx;sy=wy;
+ const sc=stickCenters();
+ if(sticks.L){let dx=sticks.L.x-sticks.L.cx,dy=sticks.L.y-sticks.L.cy,d=Math.hypot(dx,dy);if(d>8){mx=dx/Math.max(d,sc.r);my=dy/Math.max(d,sc.r)}}
+ if(touchMode){a=lastTouchAng;f=false;if(sticks.R){let dx=sticks.R.x-sticks.R.cx,dy=sticks.R.y-sticks.R.cy,d=Math.hypot(dx,dy);if(d>10){a=lastTouchAng=Math.atan2(dy,dx);f=d>sc.r*.6}}sx=p.x+Math.cos(a)*150;sy=p.y+Math.sin(a)*150}
+ const s=smokeReq;smokeReq=false;liveInput={mx,my,a,f,s,sx,sy}}
+// ---------- buttons ----------
+function togglePause(){if(!['play','ready'].includes(G.state)&&!G.paused)return;G.paused=!G.paused;G.paused?show('ovPause'):hide('ovPause')}
+document.getElementById('bPause').onclick=togglePause;
+document.getElementById('bResume').onclick=()=>{G.paused=false;hide('ovPause')};
+document.getElementById('bRestart').onclick=()=>{if(['play','fail','ready'].includes(G.state)){G.paused=false;hide('ovPause');retryRound()}};
+document.getElementById('bRestartLv').onclick=()=>{G.paused=false;hide('ovPause');startLevel(G.level)};
+document.getElementById('bRulesAgain').onclick=()=>{hide('ovPause');show('ovRules');G.rulesFromPause=true};
+document.getElementById('bMute').onclick=e=>{muted=!muted;e.target.textContent=muted?'🔇':'🔊'};
+document.getElementById('bStart').onclick=()=>{hide('ovRules');if(G.rulesFromPause){G.rulesFromPause=false;show('ovPause');return}snd(440,.1,'triangle',.03);startLevel(0)};
+document.getElementById('bGo').onclick=()=>{hide('ovLevel');G.state='ready';G.readyT=0};
+document.getElementById('bNext').onclick=()=>{document.getElementById('clearPanel').style.display='none';if(G.level<4)startLevel(G.level+1);else{G.state='final';const tot=G.stats.reduce((s,x)=>s+x.time,0);
+ document.getElementById('finalStats').innerHTML=G.stats.map((s,i)=>LEVELS[i].name+'：'+s.time.toFixed(0)+' 秒，重试 '+s.retries+' 次').join('<br>')+'<br><br>总用时 '+Math.floor(tot/60)+' 分 '+Math.round(tot%60)+' 秒。';show('ovFinal')}};
+document.getElementById('bAgain').onclick=()=>{hide('ovFinal');G.stats=[];G.totalRetries=0;startLevel(0)};
+// ---------- render ----------
+function draw(){cx.setTransform(DPR,0,0,DPR,0,0);cx.fillStyle='#06122a';cx.fillRect(0,0,VW,VH);const w=G.world;if(!w){return}
+ cx.save();cx.translate(view.ox,view.oy);cx.scale(view.s,view.s);
+ drawMap(w);
+ if(G.state==='rewind')drawRewind(w);else if(G.state==='clear')drawTangle(w);else drawLive(w);
+ cx.restore();drawHUD(w);
+ if(G.state==='rewind')drawVHS();
+ if(touchMode&&['play','ready'].includes(G.state))drawSticks()}
+function drawMap(w){cx.fillStyle='#0b2550';cx.fillRect(0,0,W,H);
+ cx.lineWidth=1/view.s;for(let x=0;x<=W;x+=20){cx.strokeStyle=x%40?'rgba(120,170,255,.07)':'rgba(120,170,255,.16)';cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,H);cx.stroke()}
+ for(let y=0;y<=H;y+=20){cx.strokeStyle=y%40?'rgba(120,170,255,.07)':'rgba(120,170,255,.16)';cx.beginPath();cx.moveTo(0,y);cx.lineTo(W,y);cx.stroke()}
+ for(let y=0;y<15;y++)for(let x=0;x<24;x++){const c=w.m[y][x];const X=x*TS,Y=y*TS;
+  if(c==='#'){cx.fillStyle='#173d78';cx.fillRect(X,Y,TS,TS);cx.strokeStyle='#5f9bf0';cx.lineWidth=1.5;
+   const n=(dx,dy)=>{const q=w.m[y+dy]&&w.m[y+dy][x+dx];return q==='#'};cx.beginPath();if(!n(0,-1)){cx.moveTo(X,Y);cx.lineTo(X+TS,Y)}if(!n(0,1)){cx.moveTo(X,Y+TS);cx.lineTo(X+TS,Y+TS)}if(!n(-1,0)){cx.moveTo(X,Y);cx.lineTo(X,Y+TS)}if(!n(1,0)){cx.moveTo(X+TS,Y);cx.lineTo(X+TS,Y+TS)}cx.stroke()}
+  else if(c==='G'){cx.fillStyle='rgba(140,220,255,.18)';cx.fillRect(X+3,Y+3,TS-6,TS-6);cx.strokeStyle='rgba(170,240,255,.8)';cx.lineWidth=1.5;cx.strokeRect(X+3,Y+3,TS-6,TS-6);cx.beginPath();cx.moveTo(X+10,Y+28);cx.lineTo(X+28,Y+10);cx.stroke()}
+  else if(c==='D'){const d=w.doors.find(d=>d.tx===x&&d.ty===y);if(d.open){cx.setLineDash([4,4]);cx.strokeStyle='#ffb24d';cx.strokeRect(X+4,Y+4,TS-8,TS-8);cx.setLineDash([])}else{cx.fillStyle='#7a4310';cx.fillRect(X+8,Y,TS-16,TS);cx.strokeStyle='#ffb24d';cx.lineWidth=2;cx.strokeRect(X+8,Y,TS-16,TS);cx.fillStyle='#ffd76a';cx.beginPath();cx.arc(X+20,Y+20,3,0,7);cx.fill()}}}
+ if(w.key&&!w.key.taken)drawKey(w.key.x,w.key.y);
+ cx.fillStyle='#e9f2ff';cx.font='bold 11px sans-serif';cx.textAlign='center';cx.globalAlpha=.55;cx.fillText('入口',w.P[0],w.P[1]+26);cx.fillText('守卫点',w.S[0],w.S[1]+26);cx.globalAlpha=1}
+function drawKey(x,y){cx.strokeStyle='#ffd76a';cx.lineWidth=2.5;cx.beginPath();cx.arc(x-5,y,5,0,7);cx.moveTo(x,y);cx.lineTo(x+10,y);cx.moveTo(x+7,y);cx.lineTo(x+7,y+5);cx.moveTo(x+10,y);cx.lineTo(x+10,y+4);cx.stroke()}
+function ghostAlpha(i,n){return n<=1?.9:.32+.6*(i/(n-1))}
+function drawPerson(x,y,ang,col,alpha,label,dead){cx.globalAlpha=alpha;if(dead){cx.strokeStyle=col;cx.lineWidth=2;cx.beginPath();cx.moveTo(x-7,y-7);cx.lineTo(x+7,y+7);cx.moveTo(x+7,y-7);cx.lineTo(x-7,y+7);cx.stroke();cx.globalAlpha=1;return}
+ cx.fillStyle=col;cx.beginPath();cx.arc(x,y,R,0,7);cx.fill();cx.strokeStyle='#fff';cx.lineWidth=1.2;cx.stroke();cx.strokeStyle=col;cx.lineWidth=4;cx.beginPath();cx.moveTo(x,y);cx.lineTo(x+Math.cos(ang)*19,y+Math.sin(ang)*19);cx.stroke();
+ if(label){cx.fillStyle='#061430';cx.font='bold 11px sans-serif';cx.textAlign='center';cx.textBaseline='middle';cx.fillText(label,x,y+.5);cx.textBaseline='alphabetic'}cx.globalAlpha=1}
+function drawLive(w){const n=w.ghosts.length;
+ // ghost previous paths
+ w.ghosts.forEach((g,i)=>{const tr=g.trace0;if(!tr)return;cx.globalAlpha=ghostAlpha(i,n)*.45;cx.strokeStyle='#ff5a6a';cx.setLineDash([3,5]);cx.lineWidth=1.5;cx.beginPath();for(let k=0;k<tr.length;k+=3){k?cx.lineTo(tr[k][0],tr[k][1]):cx.moveTo(tr[k][0],tr[k][1])}cx.stroke();cx.setLineDash([]);cx.globalAlpha=1});
+ for(const s of w.smokes){const gr=cx.createRadialGradient(s.x,s.y,0,s.x,s.y,s.r);gr.addColorStop(0,'rgba(200,210,225,.85)');gr.addColorStop(1,'rgba(160,175,200,.25)');cx.fillStyle=gr;cx.beginPath();cx.arc(s.x,s.y,s.r,0,7);cx.fill()}
+ for(const g of w.guards){if(g.alive){cx.fillStyle=g.seeT>0?'rgba(255,120,120,.16)':'rgba(230,240,255,.09)';cx.beginPath();cx.moveTo(g.x,g.y);cx.arc(g.x,g.y,200,g.ang-.6,g.ang+.6);cx.closePath();cx.fill()}
+  drawPerson(g.x,g.y,g.ang,'#e8eef8',1,'',!g.alive);if(g.alive&&g.seeT>0){cx.fillStyle='#ff6060';cx.font='bold 14px sans-serif';cx.textAlign='center';cx.fillText('!',g.x,g.y-16)}}
+ const t=w.target;if(t.alive){cx.fillStyle='#ffd76a';cx.beginPath();cx.arc(t.x,t.y,R+1,0,7);cx.fill();cx.strokeStyle='#fff6d0';cx.lineWidth=2;cx.stroke();cx.fillStyle='#7a5200';cx.beginPath();cx.moveTo(t.x-7,t.y+2);cx.lineTo(t.x-7,t.y-5);cx.lineTo(t.x-3,t.y-1);cx.lineTo(t.x,t.y-7);cx.lineTo(t.x+3,t.y-1);cx.lineTo(t.x+7,t.y-5);cx.lineTo(t.x+7,t.y+2);cx.fill();
+  cx.fillStyle='#ffd76a';cx.font='bold 11px sans-serif';cx.textAlign='center';cx.fillText('目标',t.x,t.y-17)}else drawPerson(t.x,t.y,0,'#ffd76a',1,'',true);
+ const wait=w.tick<GD&&G.round>1;w.ghosts.forEach((g,i)=>{drawPerson(g.x,g.y,g.ang,'#ff4d5e',ghostAlpha(i,n)*(wait?.45+.25*Math.sin(performance.now()/90):1),String(i+1),!g.alive);if(wait){cx.fillStyle='#ff9aa4';cx.font='10px sans-serif';cx.textAlign='center';cx.fillText('苏醒中',g.x,g.y-15)}if(g.alive&&g.hasKey)drawKey(g.x+12,g.y-14)});
+ const p=w.player;drawPerson(p.x,p.y,p.ang,'#3ff0ff',1,'你',!p.alive);if(p.hasKey)drawKey(p.x+12,p.y-14);
+ if(p.alive&&!touchMode&&G.state==='play'){cx.strokeStyle='rgba(63,240,255,.25)';cx.lineWidth=1;cx.setLineDash([2,6]);cx.beginPath();cx.moveTo(p.x,p.y);cx.lineTo(p.x+Math.cos(p.ang)*600,p.y+Math.sin(p.ang)*600);cx.stroke();cx.setLineDash([])}
+ for(const b of w.bullets){cx.fillStyle=b.owner==='p'?'#9ffbff':b.owner==='g'?'#ff7a85':'#ffffff';cx.beginPath();cx.arc(b.x,b.y,BR+.5,0,7);cx.fill();cx.strokeStyle=cx.fillStyle;cx.globalAlpha=.4;cx.lineWidth=2;cx.beginPath();cx.moveTo(b.x,b.y);cx.lineTo(b.x-b.vx*.03,b.y-b.vy*.03);cx.stroke();cx.globalAlpha=1}
+ for(const f of w.fx){cx.globalAlpha=Math.max(0,f.t*2);if(f.c==='ring'){cx.strokeStyle='#ff9aa4';cx.lineWidth=2;cx.beginPath();cx.arc(f.x,f.y,R+(0.3-f.t)*60,0,7);cx.stroke()}else{cx.fillStyle=f.c==='gold'?'#ffd76a':f.c==='r'?'#ff4d5e':f.c==='c'?'#3ff0ff':f.c==='spark'?'#fff':'#e8eef8';cx.fillRect(f.x-2,f.y-2,4,4)}cx.globalAlpha=1}}
+function drawTrails(list,upto){list.forEach(o=>{const tr=o.tr;if(!tr.length)return;cx.strokeStyle=o.col;cx.globalAlpha=o.al;cx.lineWidth=2.2;cx.beginPath();const m=Math.min(upto,tr.length-1);for(let k=0;k<=m;k+=2){k?cx.lineTo(tr[k][0],tr[k][1]):cx.moveTo(tr[k][0],tr[k][1])}cx.stroke();
+ const q=tr[m];cx.globalAlpha=1;drawPerson(q[0],q[1],q[3]||0,o.col,o.al,o.lab,!q[2])})}
+function allTrails(w){const n=w.ghosts.length;const L=w.ghosts.map((g,i)=>({tr:g.trace,col:'#ff4d5e',al:ghostAlpha(i,n),lab:String(i+1)}));L.push({tr:w.player.trace,col:'#3ff0ff',al:1,lab:'你'});return L}
+function drawRewind(w){const k=Math.max(0,Math.floor(w.tick*(1-Math.min(1,G.anim/1.4))));drawTrails(allTrails(w),k);G.rewTick=k}
+function drawTangle(w){w.ghosts.forEach((g,i)=>{const tr=g.trace0;if(!tr)return;cx.globalAlpha=.35;cx.strokeStyle='#ff5a6a';cx.setLineDash([3,5]);cx.lineWidth=1.5;cx.beginPath();for(let k=0;k<tr.length;k+=3){k?cx.lineTo(tr[k][0],tr[k][1]):cx.moveTo(tr[k][0],tr[k][1])}cx.stroke();cx.setLineDash([]);cx.globalAlpha=1});const len=w.tick,k=Math.floor((G.anim%5)/4*len);drawTrails(allTrails(w),Math.min(k,len));cx.fillStyle='rgba(255,255,255,.7)';cx.font='bold 16px sans-serif';cx.textAlign='left';cx.fillText('时间线乱麻 · 回放',12,24)}
+function drawVHS(){const t=G.anim;cx.fillStyle='rgba(20,0,40,.18)';cx.fillRect(0,0,VW,VH);
+ for(let y=0;y<VH;y+=3){cx.fillStyle='rgba(0,0,0,.22)';cx.fillRect(0,y,VW,1)}
+ for(let i=0;i<5;i++){const y=(vrand()*VH)|0,h=2+vrand()*10;cx.drawImage(cv,0,y*DPR,VW*DPR,h*DPR,(vrand()-.5)*30,y,VW,h)}
+ const by=(VH-((t*700)%VH));cx.fillStyle='rgba(255,255,255,.08)';cx.fillRect(0,by,VW,26);
+ cx.fillStyle='#fff';cx.font='bold 22px monospace';cx.textAlign='left';const tk=G.rewTick||0;const s=tk/60;cx.fillText('◀◀ REW',20,VH-60);cx.fillText('00:'+String(Math.floor(s)).padStart(2,'0')+':'+String(Math.floor((s%1)*30)).padStart(2,'0'),20,VH-30);
+ cx.textAlign='right';cx.fillText('倒带中…',VW-20,VH-30)}
+function drawHUD(w){const L=LEVELS[G.level];cx.fillStyle='rgba(6,18,42,.9)';cx.fillRect(0,0,VW,56);cx.strokeStyle='#2e5fa8';cx.beginPath();cx.moveTo(0,56);cx.lineTo(VW,56);cx.stroke();
+ const narrow=VW<600;cx.fillStyle='#8fb2e8';cx.font=(narrow?'bold 12px':'bold 14px')+' sans-serif';cx.textAlign='left';cx.fillText(narrow?L.name.split(' · ')[0]:L.name,10,narrow?20:24);
+ cx.fillStyle='#d8e8ff';cx.font=(narrow?'12px':'13px')+' sans-serif';cx.fillText('第 '+G.round+'/'+L.rounds+' 轮',10,narrow?40:44);
+ // round bar
+ const n=L.rounds,cs=narrow?22:26,x0=narrow?86:Math.max(230,VW/2-n*cs/2);
+ for(let i=0;i<n;i++){const x=x0+i*cs+cs/2,y=28;const r=narrow?9:10;
+  if(i<G.round-1){const g=w.ghosts[i];cx.globalAlpha=ghostAlpha(i,G.round-1);cx.fillStyle='#ff4d5e';cx.beginPath();cx.arc(x,y,r,0,7);cx.fill();cx.globalAlpha=1;cx.fillStyle='#061430';cx.font='bold 10px sans-serif';cx.textAlign='center';cx.fillText(i+1,x,y+4);
+   if(g&&!g.alive){cx.strokeStyle='#fff';cx.lineWidth=2;cx.beginPath();cx.moveTo(x-7,y-7);cx.lineTo(x+7,y+7);cx.moveTo(x+7,y-7);cx.lineTo(x-7,y+7);cx.stroke()}}
+  else if(i===G.round-1){cx.fillStyle='#3ff0ff';cx.beginPath();cx.arc(x,y,r,0,7);cx.fill();cx.fillStyle='#061430';cx.font='bold 10px sans-serif';cx.textAlign='center';cx.fillText('你',x,y+4)}
+  else{cx.strokeStyle='#3c5d92';cx.lineWidth=1.5;cx.beginPath();cx.arc(x,y,r,0,7);cx.stroke()}}
+ // objective
+ const obj=G.round===1?'刺杀：10 秒内干掉金色目标':'拦截：守住目标 12 秒，拦下过去的你';
+ if(G.state!=='clear'){cx.font='bold 14px sans-serif';cx.textAlign='center';cx.fillStyle=G.round===1?'#ffd76a':'#ff9aa4';
+ const oy=view.oy+H*view.s+(view.portrait?-6:0);if(view.portrait){cx.fillText(obj,VW/2,view.oy+H*view.s+(G.level>=3&&touchMode?62:22))}else cx.fillText(obj,VW/2,view.oy+H*view.s+(view.oy+H*view.s+20<VH?18:-8))}
+ // countdown ring bottom-left of map
+ const RL=G.round===1?RT1:RT,left=1-w.tick/RL,rx=view.ox+30,ry=view.oy+H*view.s-30;cx.fillStyle='rgba(6,18,42,.8)';cx.beginPath();cx.arc(rx,ry,22,0,7);cx.fill();cx.strokeStyle='#22406f';cx.lineWidth=5;cx.beginPath();cx.arc(rx,ry,17,0,7);cx.stroke();
+ cx.strokeStyle=left<.25?'#ff6a6a':'#3ff0ff';cx.beginPath();cx.arc(rx,ry,17,-Math.PI/2,-Math.PI/2+Math.PI*2*left);cx.stroke();cx.fillStyle='#fff';cx.font='bold 12px sans-serif';cx.textAlign='center';cx.fillText(Math.ceil(left*RL/60),rx,ry+4);
+ if(G.level>=3&&G.state!=='clear'){cx.fillStyle='#cfd8e8';cx.font='12px sans-serif';cx.textAlign='left';cx.fillText('烟雾 ×'+w.player.smoke,rx+28,ry+4)}
+ // banners
+ if(G.state==='ready'){banner(G.round===1?'第 1 轮 · 刺杀':'第 '+G.round+' 轮 · 拦截过去的你',G.round===1?'拿下目标':'红色残影会重放你之前的每一步',G.round===1?'#ffd76a':'#ff9aa4')}
+ if(G.state==='fail')banner('本轮失败',G.msg+' · 点击 / 空格 重试本轮'+(G.retries>=3&&G.round>1?'（守不住可暂停→重开本关，换个刺杀方式）':''),'#ff6a6a')}
+function banner(a,b,col){const y=view.oy+H*view.s*.42;cx.fillStyle='rgba(6,18,42,.85)';const bw=Math.min(VW-20,460);cx.fillRect(VW/2-bw/2,y-34,bw,64);cx.strokeStyle=col;cx.strokeRect(VW/2-bw/2,y-34,bw,64);cx.fillStyle=col;cx.font='bold 20px sans-serif';cx.textAlign='center';cx.fillText(a,VW/2,y-6);cx.fillStyle='#d8e8ff';cx.font='13px sans-serif';cx.fillText(b,VW/2,y+18)}
+function drawSticks(){const sc=stickCenters();for(const k of['L','R']){const c=sc[k],s=sticks[k];cx.strokeStyle='rgba(127,200,255,.45)';cx.lineWidth=2;cx.beginPath();cx.arc(c[0],c[1],sc.r,0,7);cx.stroke();
+ let kx=c[0],ky=c[1];if(s){let dx=s.x-s.cx,dy=s.y-s.cy,d=Math.hypot(dx,dy);if(d>sc.r){dx*=sc.r/d;dy*=sc.r/d}kx+=dx;ky+=dy}cx.fillStyle=k==='L'?'rgba(63,240,255,.45)':'rgba(255,120,130,.45)';cx.beginPath();cx.arc(kx,ky,sc.r*.42,0,7);cx.fill();
+ cx.fillStyle='rgba(220,235,255,.6)';cx.font='12px sans-serif';cx.textAlign='center';cx.fillText(k==='L'?'移动':'瞄准 / 推到底开火',c[0],c[1]+sc.r+16)}}
+// ---------- loop ----------
+let acc=0,last=performance.now();
+function frame(now){const dt=Math.min(.1,(now-last)/1000);last=now;
+ document.getElementById('smokeBtn').style.display=(touchMode&&G.level>=3&&['play','ready'].includes(G.state))?'block':'none';
+ if(!G.paused&&!G.manual){
+  if(G.state==='ready'){G.readyT+=dt;if(G.readyT>1.4)G.state='play'}
+  if(G.state==='play'){readInput();acc+=dt;while(acc>=DT&&G.state==='play'){step();acc-=DT}}else acc=0;
+  if(G.state==='rewind'){G.anim+=dt;if(G.anim>1.5)nextRound()}
+  if(G.state==='clear')G.anim+=dt;
+  if(G.world)for(const f of G.world.fx){f.x+=f.vx*dt;f.y+=f.vy*dt;f.t-=dt}if(G.world)G.world.fx=G.world.fx.filter(f=>f.t>0)}
+ draw();requestAnimationFrame(frame)}
+requestAnimationFrame(frame);
+// ---------- debug api ----------
+const api={G,LEVELS,step,hash,resetRound,retryRound,nextRound,startLevel,blocked:(...a)=>blocked(G.world,...a),
+ get w(){return G.world},
+ begin(){hideAll();G.state='play'},
+ runRound(maxT){let n=0;while(G.state==='play'&&n<(maxT||RT+5)){step();n++}return {state:G.state,msg:G.msg,tick:G.world.tick}},
+ finishAnim(){if(G.state==='rewind')nextRound();if(G.state==='ready')G.state='play'}};
+window.__game=api;
+})();
+</script></body></html>
